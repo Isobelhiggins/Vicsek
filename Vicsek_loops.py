@@ -15,11 +15,11 @@ factor = 0.5
 v0 = r0 / deltat * factor # velocity
 iterations = 200 # animation frames
 eta = 0.15 # noise/randomness
-max_neighbours = N # maximum number of neighbours a particle might have (number can be less than N)
+max_neighbours = N # maximum number of neighbours a particle might have
 
 # initialise positions and angles
 positions = np.random.uniform(0, L, size = (N, 2))
-angles = np.random.uniform(-np.pi, np.pi, size = N) # from 0 to 2pi rad
+angles = np.random.uniform(-np.pi, np.pi, size = N)
 
 @numba.njit()
 
@@ -32,19 +32,18 @@ def update(positions, angles):
     
     # loop over all particles
     for i in range(N):
-        # list of angles of neighbouring particles
         count_neighbour = 0
         # distance to other particles
         for j in range(N):
             distance = np.linalg.norm(positions[i] - positions[j])
             # if within interaction radius add angle to list
-            if distance < r0:
+            if (distance < r0) & (distance != 0):
                 neighbour_angles[count_neighbour] = angles[j]
                 count_neighbour += 1
          
         # if there are neighbours, calculate average angle and noise/randomness       
         if count_neighbour > 0:
-            average_angle = np.mean(neighbour_angles[:count_neighbour])
+            average_angle = np.angle(np.sum(np.exp(neighbour_angles[:count_neighbour] * 1j)))
             noise = eta * np.random.uniform(-np.pi, np.pi)
             new_angles[i] = average_angle + noise # updated angle with noise
         else:
@@ -56,7 +55,7 @@ def update(positions, angles):
         new_positions[i] = positions[i] + v0 * np.array([np.cos(new_angles[i]), np.sin(new_angles[i])]) * deltat
         # boundary conditions of box
         new_positions[i] %= L
-        
+       
     return new_positions, new_angles
 
 def animate(frames):
@@ -78,7 +77,7 @@ def animate(frames):
 fig, ax = plt.subplots(figsize = (6, 6))   
 
 qv = ax.quiver(positions[:,0], positions[:,1], np.cos(angles), np.sin(angles), angles, clim = [-np.pi, np.pi], cmap = "hsv")
-ax.set_title(f"Vicsek model for {N} particles, using for loops")
+ax.set_title(f"Vicsek model for {N} particles")
 anim = FuncAnimation(fig, animate, frames = range(1, iterations), interval = 5, blit = True)
 writer = FFMpegWriter(fps = 10, metadata = dict(artist = "Isobel"), bitrate = 1800)
 #anim.save("Vicsek_loops.mp4", writer = writer, dpi = 100)
