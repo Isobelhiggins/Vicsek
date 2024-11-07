@@ -11,13 +11,13 @@ print("N", N)
 
 r0 = 1.0 # interaction radius
 deltat = 1.0 # time step
-factor = 0.25
+factor = 0.5
 v0 = r0 / deltat * factor # velocity
-iterations = 200 # animation frames
+iterations = 500 # animation frames
 eta = 0.15 # noise/randomness
 max_neighbours = N # maximum number of neighbours a particle might have
 
-average_angles = np.empty(iterations)
+average_angles = np.empty(iterations // 10)
 
 # initialise positions and angles
 positions = np.random.uniform(0, L, size = (N, 2))
@@ -71,7 +71,7 @@ def animate(frames):
     positions = new_positions
     angles = new_angles
     
-    average_angles[frames] = np.mean(angles)
+    average_angles[frames // 10] = np.angle(np.mean(np.exp(angles * 1j)))
     
     # plotting
     qv.set_offsets(positions)
@@ -89,9 +89,9 @@ plt.show()
 
 fig, ax2 = plt.subplots()
 
-ax2.plot(range(iterations), average_angles)
+ax2.plot(range(0, iterations, 10), average_angles)
 ax2.set_xlabel("Time Step")
 ax2.set_ylabel("Average Angle (rad)")
 ax2.set_title("Alignment of Particles over Time")
-plt.savefig("alignment.png")
+#plt.savefig("alignment.png")
 plt.show()
