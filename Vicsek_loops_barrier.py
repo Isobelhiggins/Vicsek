@@ -17,11 +17,16 @@ iterations = 500 # animation frames
 eta = 0.15 # noise/randomness
 max_neighbours = N # maximum number of neighbours a particle might have
 
-average_angles = np.empty(iterations // 10)
-
 # initialise positions and angles
 positions = np.random.uniform(0, L, size = (N, 2))
 angles = np.random.uniform(-np.pi, np.pi, size = N) # from 0 to 2pi rad
+
+# empty array for average angles of particles every 10 time steps
+average_angles = np.empty(iterations // 10)
+
+# histogram for average particle density in different areas of the box
+bins = int(L)
+hist, xedges, yedges = np.histogram2d(positions[:,0], positions[:,1], bins = bins, density = False)
 
 # define barrier position and size
 barrier_x_start, barrier_x_end = 3, 7
@@ -84,7 +89,7 @@ def update(positions, angles):
 def animate(frames):
     print(frames)
     
-    global positions, angles
+    global positions, angles, hist
         
     new_positions, new_angles = update(positions, angles)
     
@@ -92,7 +97,11 @@ def animate(frames):
     positions = new_positions
     angles = new_angles
     
+    # update the empty array with average angle
     average_angles[frames // 10] = np.angle(np.mean(np.exp(angles * 1j)))
+    
+    # add particle positions to the histogram
+    hist += np.histogram2d(positions[:,0], positions[:,1], bins = [xedges, yedges], density = False)[0]
     
     # plotting
     qv.set_offsets(positions)
@@ -115,5 +124,18 @@ ax2.plot(range(0, iterations, 10), average_angles)
 ax2.set_xlabel("Time Step")
 ax2.set_ylabel("Average Angle (rad)")
 ax2.set_title("Alignment of Particles over Time")
-#plt.savefig("barrier_alignment_1.png")
+#plt.savefig("barrier_alignment.png")
+plt.show()
+
+# normalise the histogram to cartesian coordinates for plotting
+hist_normalised = hist.T / sum(hist)
+
+fig, ax3 = plt.subplots()
+
+cax = ax3.imshow(hist_normalised, extent = [0, L, 0, L], origin = "lower", cmap = "hot", aspect = "auto")
+ax3.set_xlabel("X Position")
+ax3.set_ylabel("Y Position")
+ax3.set_title("Normalised 2D Histogram of Particle Density")
+fig.colorbar(cax, ax = ax3, label = "Density")
+plt.savefig("barrier_densitymap.png")
 plt.show()
