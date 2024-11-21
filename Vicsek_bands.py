@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation, FFMpegWriter
 
 # parameters
-L = 10.0 # size of box
+L = 100.0 # size of box
 rho = 0.5 # density
 N = int(rho * L**2) # number of particles
 print("N:", N)
@@ -130,6 +130,7 @@ def animate(frames):
     # Update the quiver plot
     qv.set_offsets(positions)
     qv.set_UVC(np.cos(new_angles), np.sin(new_angles), new_angles)
+    np.savez_compressed(f"trajectory/frame{frames}.npz", positions=np.array(positions,dtype=np.float16), angles=np.array(angles,dtype=np.float16))
     return qv,
 
 fig, ax = plt.subplots(figsize = (6, 6))  
@@ -138,7 +139,7 @@ ax.set_title(f"Vicsek model for {N} particles")
 # ax.grid()
 # for i in range(10000):
 #     animate(i)
-anim = FuncAnimation(fig, animate, frames = range(0, iterations), interval = 5, blit = True)
+anim = FuncAnimation(fig, animate,  interval = 5, blit = True)
 writer = FFMpegWriter(fps = 10, metadata = dict(artist = "Isobel"), bitrate = 1800)
 #anim.save("Vicsek_loops.mp4", writer = writer, dpi = 100)
 plt.show()
