@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation, FFMpegWriter
 
 # parameters
-L = 10.0 # size of box
+L = 20.0 # size of box
 rho = 1.0 # density
 N = int(rho * L**2) # number of particles
 print("N", N)
@@ -25,12 +25,12 @@ angles = np.random.uniform(-np.pi, np.pi, size = N) # from 0 to 2pi rad
 average_angles = np.empty(iterations // 10)
 
 # histogram for average particle density in different areas of the box
-bins = int(L)
+bins = int(L / (r0/2))
 hist, xedges, yedges = np.histogram2d(positions[:,0], positions[:,1], bins = bins, density = False)
 
 # define barrier position and size
-barrier_x_start, barrier_x_end = 3, 7
-barrier_y_start, barrier_y_end = 3, 7
+barrier_x_start, barrier_x_end = 5, 15
+barrier_y_start, barrier_y_end = 5, 15
 
 # ensure particles are not generated inside the barrier
 positions = np.zeros((N, 2))
@@ -39,12 +39,11 @@ for i in range(N):
     while barrier_x_start <= position[0] <= barrier_x_end and barrier_y_start <= position[1] <= barrier_y_end:
         position = np.random.uniform(0, L, size = 2)
     positions[i] = position
-    
-@numba.njit()
 
+@numba.njit()
 def barrier_collision(position, angle):
     # calculate next position based on current position and angle
-    next_position = position + v0 * np.array([np.cos(angle), np.sin(angle)]) * deltat
+    next_position = (position + v0 * np.array([np.cos(angle), np.sin(angle)]) * deltat)
     
     # check if next position is at the barrier
     if barrier_x_start <= next_position[0] <= barrier_x_end and barrier_y_start <= next_position[1] <= barrier_y_end:
@@ -52,6 +51,7 @@ def barrier_collision(position, angle):
     else:
         return next_position # continue updating position if not at barrier
 
+@numba.njit(parallel = True)
 def update(positions, angles):
     
     # empty arrays to hold updated positions and angles
@@ -60,7 +60,7 @@ def update(positions, angles):
     neighbour_angles = np.empty(max_neighbours)
     
     # loop over all particles
-    for i in range(N):
+    for i in numba.prange(N):
         count_neighbour = 0
         # distance to other particles
         for j in range(N):
@@ -93,9 +93,12 @@ def animate(frames):
         
     new_positions, new_angles = update(positions, angles)
     
-    # update global variables
-    positions = new_positions
-    angles = new_angles
+    # save positions and angles to compressed npz files
+    np.savez_compressed(f"pos_ang_arrays/positions_angles{frames}.npz", positions = new_positions, angles = new_angles)
+    
+    data = np.load(f"pos_ang_arrays/positions_angles{frames}.npz")
+    positions = data["positions"]
+    angles = data["angles"]
     
     # update the empty array with average angle
     average_angles[frames // 10] = np.angle(np.mean(np.exp(angles * 1j)))
@@ -107,35 +110,35 @@ def animate(frames):
     qv.set_offsets(positions)
     qv.set_UVC(np.cos(angles), np.sin(angles), angles)
     return qv,
- 
-fig, ax = plt.subplots(figsize = (6, 6))  
- 
+
+fig, ax = plt.subplots(figsize = (12, 12))  
+
+# Vicsek Model for N Particles with an Attractive Barrier 
 qv = ax.quiver(positions[:,0], positions[:,1], np.cos(angles), np.sin(angles), angles, clim = [-np.pi, np.pi], cmap = "hsv")
 ax.add_patch(plt.Rectangle((barrier_x_start, barrier_y_start), barrier_x_end - barrier_x_start, barrier_y_end - barrier_y_start, color = "grey", alpha = 0.5))
-ax.set_title(f"Vicsek model for {N} particles with an attractive barrier")
 anim = FuncAnimation(fig, animate, frames = range(iterations), interval = 5, blit = True)
 writer = FFMpegWriter(fps = 10, metadata = dict(artist = "Isobel"), bitrate = 1800)
 #anim.save("Vicsek_loops_barrier.mp4", writer = writer, dpi = 100)
 plt.show()
 
-fig, ax2 = plt.subplots()
+fig, ax2 = plt.subplots(figsize = (12, 12))
 
+# Alignment of Particles over Time
 ax2.plot(range(0, iterations, 10), average_angles)
 ax2.set_xlabel("Time Step")
 ax2.set_ylabel("Average Angle (rad)")
-ax2.set_title("Alignment of Particles over Time")
-#plt.savefig("barrier_alignment.png")
+plt.savefig("barrier_alignment_8.png")
 plt.show()
 
 # normalise the histogram to cartesian coordinates for plotting
 hist_normalised = hist.T / sum(hist)
 
-fig, ax3 = plt.subplots()
+fig, ax3 = plt.subplots(figsize = (12, 12))
 
+# Normalised 2D Histogram of Particle Density
 cax = ax3.imshow(hist_normalised, extent = [0, L, 0, L], origin = "lower", cmap = "hot", aspect = "auto")
 ax3.set_xlabel("X Position")
 ax3.set_ylabel("Y Position")
-ax3.set_title("Normalised 2D Histogram of Particle Density")
 fig.colorbar(cax, ax = ax3, label = "Density")
-plt.savefig("barrier_densitymap.png")
+plt.savefig("barrier_densitymap2_8.png")
 plt.show()

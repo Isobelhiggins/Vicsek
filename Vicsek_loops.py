@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation, FFMpegWriter
 
 # parameters
-L = 10.0 # size of box
+L = 20.0 # size of box
 rho = 1.0 # density
 N = int(rho * L**2) # number of particles
 print("N", N)
@@ -25,11 +25,10 @@ angles = np.random.uniform(-np.pi, np.pi, size = N)
 average_angles = np.empty(iterations // 10)
 
 # histogram for average particle density in different areas of the box
-bins = int(L)
+bins = int(L / (r0 / 2))
 hist, xedges, yedges = np.histogram2d(positions[:,0], positions[:,1], bins = bins, density = False)
 
-@numba.njit()
-
+@numba.njit(parallel = True)
 def update(positions, angles):
     
     # empty arrays to hold updated positions and angles
@@ -38,7 +37,7 @@ def update(positions, angles):
     neighbour_angles = np.empty(max_neighbours)
     
     # loop over all particles
-    for i in range(N):
+    for i in numba.prange(N):
         count_neighbour = 0
         # distance to other particles
         for j in range(N):
@@ -86,34 +85,31 @@ def animate(frames):
     qv.set_offsets(positions)
     qv.set_UVC(np.cos(angles), np.sin(angles), angles)
     return qv,
- 
-fig, ax = plt.subplots(figsize = (6, 6))   
 
+# Vicsek model for N particles
+fig, ax = plt.subplots(figsize = (12, 12))   
 qv = ax.quiver(positions[:,0], positions[:,1], np.cos(angles), np.sin(angles), angles, clim = [-np.pi, np.pi], cmap = "hsv")
-ax.set_title(f"Vicsek model for {N} particles")
-anim = FuncAnimation(fig, animate, frames = range(iterations), interval = 5, blit = True)
+anim = FuncAnimation(fig, animate, frames = range(0, iterations), interval = 5, blit = True)
 writer = FFMpegWriter(fps = 10, metadata = dict(artist = "Isobel"), bitrate = 1800)
 #anim.save("Vicsek_loops.mp4", writer = writer, dpi = 100)
 plt.show()
 
-fig, ax2 = plt.subplots()
-
+# Alignment of Particles over Time
+fig, ax2 = plt.subplots(figsize = (12, 12))
 ax2.plot(range(0, iterations, 10), average_angles)
 ax2.set_xlabel("Time Step")
 ax2.set_ylabel("Average Angle (rad)")
-ax2.set_title("Alignment of Particles over Time")
-#plt.savefig("alignment.png")
+plt.savefig("alignment_8.png")
 plt.show()
 
 # normalise the histogram to cartesian coordinates for plotting
 hist_normalised = hist.T / sum(hist)
 
-fig, ax3 = plt.subplots()
-
+# Normalised 2D Histogram of Particle Density
+fig, ax3 = plt.subplots(figsize = (12, 12))
 cax = ax3.imshow(hist_normalised, extent = [0, L, 0, L], origin = "lower", cmap = "hot", aspect = "auto")
 ax3.set_xlabel("X Position")
 ax3.set_ylabel("Y Position")
-ax3.set_title("Normalised 2D Histogram of Particle Density")
 fig.colorbar(cax, ax = ax3, label = "Density")
-plt.savefig("densitymap.png")
+plt.savefig("densitymap2_8.png")
 plt.show()
