@@ -10,10 +10,10 @@ N = int(rho * L**2) # number of particles
 print("N:", N)
 r0 = 1.0 # interaction radius
 deltat = 1.0 # time step
-factor = 1.
+factor = 1.0
 v0 = 0.5 #r0 / deltat * factor # velocity
-iterations = 100 # animation frames
-eta = 0.3 # noise/randomness
+iterations = 500 # animation frames
+eta = 0.2 # noise/randomness
 max_neighbours = N // 2 #  guess a good value, max is N
 
 # initialise positions and angles
@@ -45,7 +45,7 @@ def initialize_cells(positions, cell_size, num_cells, max_particles_per_cell):
     cell_counts = np.zeros((num_cells, num_cells), dtype = np.int32)
     
     # populate cells with particle indices
-    for i in  numba.prange(positions.shape[0]):
+    for i in numba.prange(positions.shape[0]):
         cell_x, cell_y = get_cell_index(positions[i], cell_size, num_cells)
         idx = cell_counts[cell_x, cell_y]
         if idx < max_particles_per_cell:
@@ -130,37 +130,36 @@ def animate(frames):
     # Update the quiver plot
     qv.set_offsets(positions)
     qv.set_UVC(np.cos(new_angles), np.sin(new_angles), new_angles)
-    np.savez_compressed(f"trajectory/frame{frames}.npz", positions=np.array(positions,dtype=np.float16), angles=np.array(angles,dtype=np.float16))
+    np.savez_compressed(f"pos_ang_arrays/frame{frames}.npz", positions = np.array(positions, dtyp = np.float16), angles = np.array(angles, dtype = np.float16))
     return qv,
 
-fig, ax = plt.subplots(figsize = (6, 6)) 
+fig, ax = plt.subplots(figsize = (12, 12)) 
 
+# Vicsek Model for N Particles
 qv = ax.quiver(positions[:,0], positions[:,1], np.cos(angles), np.sin(angles), angles, clim = [-np.pi, np.pi], cmap = "hsv")
-ax.set_title(f"Vicsek model for {N} particles")
-# ax.grid()
-# for i in range(10000):
-#     animate(i)
-anim = FuncAnimation(fig, animate,  interval = 5, blit = True)
+anim = FuncAnimation(fig, animate, frames = range(0, iterations), interval = 5, blit = True)
 writer = FFMpegWriter(fps = 10, metadata = dict(artist = "Isobel"), bitrate = 1800)
-#anim.save("Vicsek_loops.mp4", writer = writer, dpi = 100)
+#anim.save("Vicsek_bands.mp4", writer = writer, dpi = 100)
 plt.show()
 
-fig, ax2 = plt.subplots(figsize = (6, 6))
+fig, ax2 = plt.subplots(figsize = (12, 12))
+
+# Alignment of Particles over Time
 ax2.plot(range(0, iterations, 10), average_angles)
 ax2.set_xlabel("Time Step")
 ax2.set_ylabel("Average Angle (radians)")
-ax2.set_title("Alignment of Particles over Time")
-#plt.savefig("alignment.png")
+#plt.savefig("alignment_9.png")
 plt.show()
 
 # normalise the histogram to cartesian coordinates for plotting
 hist_normalised = hist.T / sum(hist)
 
 fig, ax3 = plt.subplots(figsize = (12, 12))
+
+# Normalised 2D Histogram of Particle Density
 cax = ax3.imshow(hist_normalised, extent = [0, L, 0, L], origin = "lower", cmap = "hot", aspect = "auto")
 ax3.set_xlabel("X Position")
 ax3.set_ylabel("Y Position")
-ax3.set_title("Normalised 2D Histogram of Particle Density")
 fig.colorbar(cax, ax = ax3, label = "Density")
-#plt.savefig("densitymap.png")
+#plt.savefig("densitymap_9.png")
 plt.show()
