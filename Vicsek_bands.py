@@ -1,11 +1,13 @@
 import numba
 import numpy as np
 import matplotlib.pyplot as plt
+plt.rcParams["font.family"] = "Arial"
+plt.rcParams["font.size"] = "11"
 from matplotlib.animation import FuncAnimation, FFMpegWriter
 
 # parameters
-L = 100.0 # size of box
-rho = 0.5 # density
+L = 50.0 # size of box
+rho = 2.0 # density
 N = int(rho * L**2) # number of particles
 print("N:", N)
 r0 = 1.0 # interaction radius
@@ -18,7 +20,8 @@ max_neighbours = N // 2 #  guess a good value, max is N
 
 # initialise positions and angles
 positions = np.random.uniform(0, L, size = (N, 2))
-angles = np.pi/2*np.ones(N) #np.random.uniform(-np.pi, np.pi, size = N) # from 0 to 2pi rad
+# angles = np.pi/2*np.ones(N) 
+angles = np.random.uniform(-np.pi, np.pi, size = N) # from 0 to 2pi rad
 
 # cell list
 cell_size = 1.0 * r0
@@ -26,8 +29,11 @@ lateral_num_cells = int(L / cell_size)
 total_num_cells = lateral_num_cells ** 2
 max_particles_per_cell = int(rho * cell_size ** 2 * 10)
 
-# empty array for average angles of particles every 10 time steps
-average_angles = np.empty(iterations // 10)
+# average angles
+time_step = 10
+frames_time_step = np.empty(time_step)
+t = 0
+average_angles = [] # empty array for average angles
 
 # histogram for average particle density in different areas of the box
 bins = int(L / (r0/2))
@@ -52,6 +58,12 @@ def initialize_cells(positions, cell_size, num_cells, max_particles_per_cell):
             cells[cell_x, cell_y, idx] = i  # add particle index to cell
             cell_counts[cell_x, cell_y] += 1  # update particle count in this cell
     return cells, cell_counts
+
+@numba.njit
+def average_angle(new_angles):
+    return np.angle(np.sum(np.exp(new_angles * 1.0j)))
+
+average_angles = [average_angle(positions)]
 
 @numba.njit(parallel=True)
 def update(positions, angles, cell_size, num_cells, max_particles_per_cell):
@@ -113,7 +125,7 @@ def update(positions, angles, cell_size, num_cells, max_particles_per_cell):
 
 def animate(frames):
     print(frames)
-    global positions, angles, hist
+    global positions, angles, frames_time_step, t, hist
     
     new_positions, new_angles = update(positions, angles, cell_size, lateral_num_cells, max_particles_per_cell)
         
@@ -122,7 +134,13 @@ def animate(frames):
     angles = new_angles
     
     # update the empty array with average angle
-    average_angles[frames // 10] = np.angle(np.mean(np.exp(angles * 1j)))
+    frames_time_step[t] = average_angle(new_angles)
+    if t == time_step - 1:  # check if array filled
+        average_angles.append(average_angle(frames_time_step))
+        t = 0  # reset t
+        frames_time_step = np.empty(time_step)  # reinitialise array
+    else:
+        t += 1  # increment t
     
     # add particle positions to the histogram
     hist += np.histogram2d(positions[:,0], positions[:,1], bins = [xedges, yedges], density = False)[0]
@@ -130,36 +148,62 @@ def animate(frames):
     # Update the quiver plot
     qv.set_offsets(positions)
     qv.set_UVC(np.cos(new_angles), np.sin(new_angles), new_angles)
-    np.savez_compressed(f"pos_ang_arrays/frame{frames}.npz", positions = np.array(positions, dtyp = np.float16), angles = np.array(angles, dtype = np.float16))
+    np.savez_compressed(f"pos_ang_arrays/frame{frames}.npz", positions = np.array(positions, dtype = np.float16), angles = np.array(angles, dtype = np.float16))
     return qv,
 
-fig, ax = plt.subplots(figsize = (12, 12)) 
-
-# Vicsek Model for N Particles
+# Vicsek Model for N Particles Animation
+fig, ax = plt.subplots(figsize = (3.5, 3.5)) 
 qv = ax.quiver(positions[:,0], positions[:,1], np.cos(angles), np.sin(angles), angles, clim = [-np.pi, np.pi], cmap = "hsv")
 anim = FuncAnimation(fig, animate, frames = range(0, iterations), interval = 5, blit = True)
 writer = FFMpegWriter(fps = 10, metadata = dict(artist = "Isobel"), bitrate = 1800)
-#anim.save("Vicsek_bands.mp4", writer = writer, dpi = 100)
+# anim.save("Vicsek_bands.mp4", writer = writer, dpi = 300)
 plt.show()
 
-fig, ax2 = plt.subplots(figsize = (12, 12))
+# First and Last Frame Vicsek Model for N particles
+start_positions = positions.copy()
+start_angles = angles.copy()
+
+for frame in range(0, iterations + 1):
+    animate(frame)
+    
+end_positions = positions
+end_angles = angles
+
+fig, (ax4, ax5) = plt.subplots(1, 2, figsize = (7, 3))
+ax4.set_aspect("equal")
+ax4.quiver(start_positions[:,0], start_positions[:,1], np.cos(start_angles), np.sin(start_angles), angles, clim = [-np.pi, np.pi], cmap = "hsv")
+ax4.set_title("Frame 0")
+ax4.set_xticks(range(0, 51, 10))
+ax4.set_yticks(range(0, 51, 10))
+ax5.set_aspect("equal")
+ax5.quiver(end_positions[:,0], end_positions[:,1], np.cos(end_angles), np.sin(end_angles), angles, clim = [-np.pi, np.pi], cmap = "hsv")
+ax5.set_title(f"Frame {iterations}")
+ax5.set_xticks(range(0, 51, 10))
+ax5.set_yticks(range(0, 51, 10))
+plt.tight_layout()
+# plt.savefig("Vicsek_bands_9.png", dpi = 300)
+plt.show()
 
 # Alignment of Particles over Time
-ax2.plot(range(0, iterations, 10), average_angles)
+fig, ax2 = plt.subplots(figsize = (3.5, 2.5))
+times = np.arange(0,len(average_angles))*time_step
+ax2.plot(times, average_angles)
 ax2.set_xlabel("Time Step")
 ax2.set_ylabel("Average Angle (radians)")
-#plt.savefig("alignment_9.png")
+ax2.set_xticks(range(0, 501, 100))
+plt.tight_layout()
+# plt.savefig("alignment_9.png", dpi = 300)
 plt.show()
 
 # normalise the histogram to cartesian coordinates for plotting
 hist_normalised = hist.T / sum(hist)
 
-fig, ax3 = plt.subplots(figsize = (12, 12))
-
 # Normalised 2D Histogram of Particle Density
+fig, ax3 = plt.subplots(figsize = (3.5, 2.5))
 cax = ax3.imshow(hist_normalised, extent = [0, L, 0, L], origin = "lower", cmap = "hot", aspect = "auto")
-ax3.set_xlabel("X Position")
-ax3.set_ylabel("Y Position")
+ax3.set_xticks(range(0, 51, 10))
+ax3.set_yticks(range(0, 51, 10))
 fig.colorbar(cax, ax = ax3, label = "Density")
-#plt.savefig("densitymap_9.png")
+plt.tight_layout()
+# plt.savefig("densitymap_9.png", dpi = 300)
 plt.show()
