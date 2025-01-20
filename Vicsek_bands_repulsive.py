@@ -206,7 +206,7 @@ def animate(frames):
     # Update the quiver plot
     qv.set_offsets(positions)
     qv.set_UVC(np.cos(new_angles), np.sin(new_angles), new_angles)
-    np.savez_compressed(f"pos_ang_arrays/frame{frames}.npz", positions = np.array(positions, dtype = np.float16), angles = np.array(angles, dtype = np.float16))
+    np.savez_compressed(f"pos_ang_arrays/bands_repulsive/frame{frames}.npz", positions = np.array(positions, dtype = np.float16), angles = np.array(angles, dtype = np.float16))
     return qv,
 
 # Vicsek Model for N Particles Animation

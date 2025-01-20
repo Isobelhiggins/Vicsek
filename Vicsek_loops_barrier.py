@@ -103,6 +103,10 @@ def animate(frames):
         
     new_positions, new_angles = update(positions, angles)
     
+    # update global variables
+    positions = new_positions
+    angles = new_angles
+    
     # update the empty array with average angle
     frames_time_step[t] = average_angle(new_angles)
     if t == time_step - 1:  # check if array filled
@@ -121,13 +125,13 @@ def animate(frames):
     np.savez_compressed(f"pos_ang_arrays/loops_barrier/frame{frames}.npz", positions = np.array(positions, dtype = np.float16), angles = np.array(angles, dtype = np.float16))
     return qv,
 
-# Vicsek Model for N Particles with an Attractive Barrier 
+# Vicsek Model for N Particles Animation
 fig, ax = plt.subplots(figsize = (3.5, 3.5))  
 qv = ax.quiver(positions[:,0], positions[:,1], np.cos(angles), np.sin(angles), angles, clim = [-np.pi, np.pi], cmap = "hsv")
 ax.add_patch(plt.Rectangle((barrier_x_start, barrier_y_start), barrier_x_end - barrier_x_start, barrier_y_end - barrier_y_start, color = "grey", alpha = 0.5))
-anim = FuncAnimation(fig, animate, frames = range(iterations), interval = 5, blit = True)
+anim = FuncAnimation(fig, animate, frames = range(0, iterations), interval = 5, blit = True)
 writer = FFMpegWriter(fps = 10, metadata = dict(artist = "Isobel"), bitrate = 1800)
-anim.save("Vicsek_loops_barrier.mp4", writer = writer, dpi = 300)
+# anim.save("Vicsek_loops_barrier.mp4", writer = writer, dpi = 300)
 plt.show()
 
 # Alignment of Particles over Time
@@ -136,7 +140,7 @@ times = np.arange(0,len(average_angles))*time_step
 ax2.plot(times, average_angles)
 ax2.set_xlabel("Time Step")
 ax2.set_ylabel("Average Angle (radians)")
-plt.savefig("barrier_alignment_8.png", dpi = 300)
+# plt.savefig("barrier_alignment_8.png", dpi = 300)
 plt.show()
 
 # normalise the histogram to cartesian coordinates for plotting
@@ -148,5 +152,5 @@ cax = ax3.imshow(hist_normalised, extent = [0, L, 0, L], origin = "lower", cmap 
 ax3.set_xlabel("X Position")
 ax3.set_ylabel("Y Position")
 fig.colorbar(cax, ax = ax3, label = "Density")
-plt.savefig("barrier_densitymap2_8.png", dpi = 300)
+# plt.savefig("barrier_densitymap2_8.png", dpi = 300)
 plt.show()
