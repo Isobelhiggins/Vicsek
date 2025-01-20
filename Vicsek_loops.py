@@ -1,6 +1,7 @@
 import numba
 import numpy as np
 import matplotlib.pyplot as plt
+plt.rcParams["font.family"] = "Arial"
 from matplotlib.animation import FuncAnimation, FFMpegWriter
 
 # parameters
@@ -14,7 +15,7 @@ deltat = 1.0 # time step
 factor = 0.5
 v0 = r0 / deltat * factor # velocity
 iterations = 500 # animation frames
-eta = 0.15 # noise/randomness
+eta = 0.2 # noise/randomness
 max_neighbours = N # maximum number of neighbours a particle might have
 
 # initialise positions and angles
@@ -22,11 +23,23 @@ positions = np.random.uniform(0, L, size = (N, 2))
 angles = np.random.uniform(-np.pi, np.pi, size = N)
 
 # empty array for average angles of particles every 10 time steps
-average_angles = np.empty(iterations // 10)
+# average_angles = np.empty(iterations // 10)
+
+time_step = 10
+frames_time_step = np.empty(time_step)
+t = 0
+# average_angles = np.empty(iterations // time_step)
+average_angles = []
 
 # histogram for average particle density in different areas of the box
 bins = int(L / (r0 / 2))
 hist, xedges, yedges = np.histogram2d(positions[:,0], positions[:,1], bins = bins, density = False)
+
+@numba.njit
+def average_angle(new_angles):
+    return np.angle(np.sum(np.exp(new_angles * 1.0j)))
+
+average_angles = [average_angle(positions)]
 
 @numba.njit(parallel = True)
 def update(positions, angles):
@@ -67,7 +80,7 @@ def update(positions, angles):
 def animate(frames):
     print(frames)
     
-    global positions, angles, hist
+    global positions, angles, frames_t_step, t, hist
     
     new_positions, new_angles = update(positions, angles)
     
@@ -76,7 +89,13 @@ def animate(frames):
     angles = new_angles
     
     # update the empty array with average angle
-    average_angles[frames // 10] = np.angle(np.mean(np.exp(angles * 1j)))
+    frames_time_step[t] = average_angle(new_angles)
+    if t == time_step - 1:  # check if array filled
+        average_angles.append(average_angle(frames_time_step))
+        t = 0  # reset t
+        frames_time_step = np.empty(time_step)  # reinitialise array
+    else:
+        t += 1  # increment t
     
     # add particle positions to the histogram
     hist += np.histogram2d(positions[:,0], positions[:,1], bins = [xedges, yedges], density = False)[0]
@@ -84,32 +103,34 @@ def animate(frames):
     # plotting
     qv.set_offsets(positions)
     qv.set_UVC(np.cos(angles), np.sin(angles), angles)
+    np.savez_compressed(f"pos_ang_arrays/loops/frame{frames}.npz", positions = np.array(positions, dtype = np.float16), angles = np.array(angles, dtype = np.float16))
     return qv,
 
 # Vicsek model for N particles
-fig, ax = plt.subplots(figsize = (12, 12))   
+fig, ax = plt.subplots(figsize = (3.5, 3.5))   
 qv = ax.quiver(positions[:,0], positions[:,1], np.cos(angles), np.sin(angles), angles, clim = [-np.pi, np.pi], cmap = "hsv")
 anim = FuncAnimation(fig, animate, frames = range(0, iterations), interval = 5, blit = True)
 writer = FFMpegWriter(fps = 10, metadata = dict(artist = "Isobel"), bitrate = 1800)
-#anim.save("Vicsek_loops.mp4", writer = writer, dpi = 100)
+anim.save("Vicsek_loops.mp4", writer = writer, dpi = 300)
 plt.show()
 
 # Alignment of Particles over Time
-fig, ax2 = plt.subplots(figsize = (12, 12))
-ax2.plot(range(0, iterations, 10), average_angles)
+fig, ax2 = plt.subplots(figsize = (3.5, 2.5))
+times = np.arange(0,len(average_angles))*time_step
+ax2.plot(times, average_angles)
 ax2.set_xlabel("Time Step")
-ax2.set_ylabel("Average Angle (rad)")
-plt.savefig("alignment_8.png")
+ax2.set_ylabel("Average Angle (radians)")
+plt.savefig("barrier_alignment_8.png", dpi = 300)
 plt.show()
 
 # normalise the histogram to cartesian coordinates for plotting
 hist_normalised = hist.T / sum(hist)
 
 # Normalised 2D Histogram of Particle Density
-fig, ax3 = plt.subplots(figsize = (12, 12))
+fig, ax3 = plt.subplots(figsize = (3.5, 2.5))
 cax = ax3.imshow(hist_normalised, extent = [0, L, 0, L], origin = "lower", cmap = "hot", aspect = "auto")
 ax3.set_xlabel("X Position")
 ax3.set_ylabel("Y Position")
 fig.colorbar(cax, ax = ax3, label = "Density")
-plt.savefig("densitymap2_8.png")
+plt.savefig("densitymap2_8.png", dpi = 300)
 plt.show()
