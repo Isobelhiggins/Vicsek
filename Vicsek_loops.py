@@ -22,14 +22,11 @@ max_neighbours = N # maximum number of neighbours a particle might have
 positions = np.random.uniform(0, L, size = (N, 2))
 angles = np.random.uniform(-np.pi, np.pi, size = N)
 
-# empty array for average angles of particles every 10 time steps
-# average_angles = np.empty(iterations // 10)
-
+# average angles
 time_step = 10
 frames_time_step = np.empty(time_step)
 t = 0
-# average_angles = np.empty(iterations // time_step)
-average_angles = []
+average_angles = [] # empty array for average angles
 
 # histogram for average particle density in different areas of the box
 bins = int(L / (r0 / 2))
@@ -80,7 +77,7 @@ def update(positions, angles):
 def animate(frames):
     print(frames)
     
-    global positions, angles, frames_t_step, t, hist
+    global positions, angles, frames_time_step, t, hist
     
     new_positions, new_angles = update(positions, angles)
     
@@ -106,7 +103,7 @@ def animate(frames):
     np.savez_compressed(f"pos_ang_arrays/loops/frame{frames}.npz", positions = np.array(positions, dtype = np.float16), angles = np.array(angles, dtype = np.float16))
     return qv,
 
-# Vicsek model for N particles
+# Vicsek Model for N Particles Animation
 fig, ax = plt.subplots(figsize = (3.5, 3.5))   
 qv = ax.quiver(positions[:,0], positions[:,1], np.cos(angles), np.sin(angles), angles, clim = [-np.pi, np.pi], cmap = "hsv")
 anim = FuncAnimation(fig, animate, frames = range(0, iterations), interval = 5, blit = True)
