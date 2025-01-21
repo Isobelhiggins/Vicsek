@@ -161,24 +161,64 @@ for eta in eta_values:
     
     average_angles = [] # initialise average angles array
     
+    hist = np.empty((len(xedges) - 1, len(yedges) - 1)) # initialise histogram density map
+    
     # Vicsek Model for N Particles Animation
     fig, ax = plt.subplots(figsize = (3.5, 3.5)) 
     qv = ax.quiver(positions[:,0], positions[:,1], np.cos(angles), np.sin(angles), angles, clim = [-np.pi, np.pi], cmap = "hsv")
-    anim = FuncAnimation(fig, animate, frames = range(0, iterations), interval = 5, blit = True)
+    anim = FuncAnimation(fig, animate, frames = range(0, iterations + 1), interval = 5, blit = True)
     # writer = FFMpegWriter(fps = 10, metadata = dict(artist = "Isobel"), bitrate = 1800)
     # anim.save("Vicsek_bands.mp4", writer = writer, dpi = 300)
     # plt.show()
     
-    # run simulation
-    for frame in range(0, iterations):
+    # First and Last Frame Vicsek Model for N particles
+    start_positions = positions.copy()
+    start_angles = angles.copy()
+
+    for frame in range(0, iterations + 1):
         animate(frame)
+        
+        # store alignment for each eta    
+        alignment_data[eta] = average_angles
+         
+    end_positions = positions
+    end_angles = angles
+
+    fig, (ax4, ax5) = plt.subplots(1, 2, figsize = (7, 3))
+    ax4.set_aspect("equal")
+    ax4.quiver(start_positions[:,0], start_positions[:,1], np.cos(start_angles), np.sin(start_angles), angles, clim = [-np.pi, np.pi], cmap = "hsv")
+    ax4.set_title("Frame 0")
+    ax4.set_xlabel(f"Noise = {eta}")
+    ax4.set_xticks(range(0, 51, 10))
+    ax4.set_yticks(range(0, 51, 10))
+    ax5.set_aspect("equal")
+    ax5.quiver(end_positions[:,0], end_positions[:,1], np.cos(end_angles), np.sin(end_angles), angles, clim = [-np.pi, np.pi], cmap = "hsv")
+    ax5.set_title(f"Frame {iterations}")
+    ax5.set_xlabel(f"Noise = {eta}")
+    ax5.set_xticks(range(0, 51, 10))
+    ax5.set_yticks(range(0, 51, 10))
+    plt.tight_layout()
+    # plt.savefig(f"Vicsek_bands_14_{int(eta*10)}.png", dpi = 300)
+    plt.show()
     
-    # store alignment for each eta    
-    alignment_data[eta] = average_angles
+    # normalise the histogram to cartesian coordinates for plotting
+    hist_normalised = hist.T / np.sum(hist)
+
+    # Normalised 2D Histogram of Particle Density
+    fig, ax3 = plt.subplots(figsize = (3.5, 2.5))
+    cax = ax3.imshow(hist_normalised, extent = [0, L, 0, L], origin = "lower", cmap = "hot", aspect = "auto")
+    ax3.set_xticks(range(0, 51, 10))
+    ax3.set_yticks(range(0, 51, 10))
+    ax3.set_title(f"Noise = {eta}")
+    fig.colorbar(cax, ax = ax3, label = "Density")
+    plt.tight_layout()
+    # plt.savefig(f"densitymap_14_{int(eta*10)}.png", dpi = 300)
+    plt.show()
     
 fig, ax6 = plt.subplots(figsize = (3.5, 2.5))
-times = np.arange(0, len(average_angles)) * time_step
+# times = np.arange(0, len(average_angles)) * time_step
 for eta, avg_angles in alignment_data.items(): # plot average angles for each eta
+    times = np.arange(0, len(avg_angles)) * time_step
     ax6.plot(times, avg_angles, label = f"noise = {eta}") 
 ax6.set_xlabel("Time Step")
 ax6.set_ylabel("Average Angle (radians)")
