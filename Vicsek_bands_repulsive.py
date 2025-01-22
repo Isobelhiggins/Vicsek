@@ -43,7 +43,8 @@ hist, xedges, yedges = np.histogram2d(positions[:,0], positions[:,1], bins = bin
 barrier_x_start, barrier_x_end = 15, 35
 barrier_y_start, barrier_y_end = 15, 35
 
-turnfactor = np.pi
+# barrier collision avoidance
+turnfactor = np.pi/2
 boundary = r0
 turned = np.zeros(N, dtype = bool)
 
@@ -61,39 +62,24 @@ def barrier_collision(position, angle, turned):
     next_position = (position + v0 * np.array([np.cos(angle), np.sin(angle)]) * deltat)
     next_angle = angle
     
-    if turned == False:       
+    # if particle has not turned
+    if turned == False:
+        # if particle's next position is within the boundary, turn
         if (((barrier_x_start - boundary) <= next_position[0] <= (barrier_x_end + boundary)) and
             ((barrier_y_start - boundary) <= next_position[1] <= (barrier_y_end + boundary))):
             next_angle += turnfactor
             turned = True
             
             next_position = (position + v0 * np.array([np.cos(next_angle), np.sin(next_angle)]) * deltat)
-            
-            if (((barrier_x_start - boundary) <= next_position[0] <= (barrier_x_end + boundary)) and
-                ((barrier_y_start - boundary) <= next_position[1] <= (barrier_y_end + boundary))):
-                next_angle += 1.5*turnfactor
-                
-    else:
-        if (((barrier_x_start - boundary) > next_position[0] > (barrier_x_end + boundary)) and
-                ((barrier_y_start - boundary) > next_position[1] > (barrier_y_end + boundary))):
-            turned = False
-        
-    next_position = (position + v0 * np.array([np.cos(next_angle), np.sin(next_angle)]) * deltat)
     
+    # if particle's next position is within barrier, do not update position for 1 time step, but turn
     if ((barrier_x_start <= next_position[0] <= barrier_x_end) and
         (barrier_y_start <= next_position[1] <= barrier_y_end)):
-        next_position = position
         next_angle += turnfactor
         turned = True
+        return position, next_angle, turned
         
     return next_position, next_angle, turned
-        
-
-    # # check if next position is at the barrier
-    # if barrier_x_start <= next_position[0] <= barrier_x_end and barrier_y_start <= next_position[1] <= barrier_y_end:
-    #     return position # return current position when it hit the barrier
-    # else:
-    #     return next_position # continue updating position if not at barrier
 
 @numba.njit()
 def get_cell_index(pos, cell_size, num_cells):
@@ -220,31 +206,31 @@ writer = FFMpegWriter(fps = 10, metadata = dict(artist = "Isobel"), bitrate = 18
 plt.show()
 
 # First and Last Frame Vicsek Model for N particles
-start_positions = positions.copy()
-start_angles = angles.copy()
+# start_positions = positions.copy()
+# start_angles = angles.copy()
 
-for frame in range(0, iterations + 1):
-    animate(frame)
+# for frame in range(0, iterations + 1):
+#     animate(frame)
     
-end_positions = positions
-end_angles = angles
+# end_positions = positions
+# end_angles = angles
 
-fig, (ax4, ax5) = plt.subplots(1, 2, figsize = (7, 3))
-ax4.set_aspect("equal")
-ax4.quiver(start_positions[:,0], start_positions[:,1], np.cos(start_angles), np.sin(start_angles), angles, clim = [-np.pi, np.pi], cmap = "hsv")
-ax4.add_patch(plt.Rectangle((barrier_x_start, barrier_y_start), barrier_x_end - barrier_x_start, barrier_y_end - barrier_y_start, color = "grey", alpha = 0.5))
-ax4.set_title("Frame 0")
-ax4.set_xticks(range(0, 51, 10))
-ax4.set_yticks(range(0, 51, 10))
-ax5.set_aspect("equal")
-ax5.quiver(end_positions[:,0], end_positions[:,1], np.cos(end_angles), np.sin(end_angles), angles, clim = [-np.pi, np.pi], cmap = "hsv")
-ax5.add_patch(plt.Rectangle((barrier_x_start, barrier_y_start), barrier_x_end - barrier_x_start, barrier_y_end - barrier_y_start, color = "grey", alpha = 0.5))
-ax5.set_title(f"Frame {iterations}")
-ax5.set_xticks(range(0, 51, 10))
-ax5.set_yticks(range(0, 51, 10))
-plt.tight_layout()
-# plt.savefig("Vicsek_bands_repulsive_9.png", dpi = 300)
-plt.show()
+# fig, (ax4, ax5) = plt.subplots(1, 2, figsize = (7, 3))
+# ax4.set_aspect("equal")
+# ax4.quiver(start_positions[:,0], start_positions[:,1], np.cos(start_angles), np.sin(start_angles), angles, clim = [-np.pi, np.pi], cmap = "hsv")
+# ax4.add_patch(plt.Rectangle((barrier_x_start, barrier_y_start), barrier_x_end - barrier_x_start, barrier_y_end - barrier_y_start, color = "grey", alpha = 0.5))
+# ax4.set_title("Frame 0")
+# ax4.set_xticks(range(0, 51, 10))
+# ax4.set_yticks(range(0, 51, 10))
+# ax5.set_aspect("equal")
+# ax5.quiver(end_positions[:,0], end_positions[:,1], np.cos(end_angles), np.sin(end_angles), angles, clim = [-np.pi, np.pi], cmap = "hsv")
+# ax5.add_patch(plt.Rectangle((barrier_x_start, barrier_y_start), barrier_x_end - barrier_x_start, barrier_y_end - barrier_y_start, color = "grey", alpha = 0.5))
+# ax5.set_title(f"Frame {iterations}")
+# ax5.set_xticks(range(0, 51, 10))
+# ax5.set_yticks(range(0, 51, 10))
+# plt.tight_layout()
+# # plt.savefig("Vicsek_bands_repulsive_14.png", dpi = 300)
+# plt.show()
 
 
 # Alignment of Particles over Time
@@ -255,7 +241,7 @@ ax2.set_xlabel("Time Step")
 ax2.set_ylabel("Average Angle (radians)")
 ax2.set_xticks(range(0, 501, 100))
 plt.tight_layout()
-# plt.savefig("repulsive_alignment_9.png", dpi = 300)
+# plt.savefig("repulsive_alignment_14.png", dpi = 300)
 plt.show()
 
 # normalise the histogram to cartesian coordinates for plotting
@@ -268,5 +254,5 @@ ax3.set_xticks(range(0, 51, 10))
 ax3.set_yticks(range(0, 51, 10))
 fig.colorbar(cax, ax = ax3, label = "Density")
 plt.tight_layout()
-# plt.savefig("repulsive_densitymap_9.png", dpi = 300)
+# plt.savefig("repulsive_densitymap_14.png", dpi = 300)
 plt.show()
