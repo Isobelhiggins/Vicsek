@@ -4,6 +4,8 @@ import matplotlib.pyplot as plt
 plt.rcParams["font.family"] = "Arial"
 plt.rcParams["font.size"] = "11"
 from matplotlib.animation import FuncAnimation, FFMpegWriter
+from scipy.spatial.distance import pdist, squareform
+from sklearn.cluster import DBSCAN
 
 # parameters
 L = 50.0 # size of box
@@ -16,7 +18,7 @@ factor = 1.0
 v0 = 0.5 #r0 / deltat * factor # velocity
 iterations = 500 # animation frames
 # eta = 0.2 # noise/randomness
-eta_values = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5]
+eta_values = [0.1, 0.2, 0.3, 0.4, 0.5]
 max_neighbours = N // 2 #  guess a good value, max is N
 
 # initialise positions and angles
@@ -36,10 +38,15 @@ frames_time_step = np.empty(time_step)
 t = 0
 average_angles = [] # empty array for average angles
 alignment_data = {} # dictionary for aligment data for each eta
+order_parameters = []
 
 # histogram for average particle density in different areas of the box
 bins = int(L / (r0/2))
 hist, xedges, yedges = np.histogram2d(positions[:,0], positions[:,1], bins = bins, density = False)
+
+threshold = r0
+all_num_clusters = [] # empty array for number of clusters
+all_avg_cluster_particles = [] # empty array for average num of particles per cluster
 
 @numba.njit()
 def get_cell_index(pos, cell_size, num_cells):
@@ -66,6 +73,42 @@ def average_angle(new_angles):
     return np.angle(np.sum(np.exp(new_angles * 1.0j)))
 
 average_angles = [average_angle(positions)]
+
+@numba.njit
+def order_parameter(angles):
+    avg_velocity = np.array([np.cos(angles), np.sin(angles)]).mean(axis = 1)
+    order_param = np.linalg.norm(avg_velocity)
+    # order_parameters.append(order_param)
+    return order_param
+
+def clusters(positions, L, threshold):
+    # taking into account periodic boundary conditions
+    total = 0
+    for d in range(positions.shape[1]):
+        pd = pdist(positions[:, d].reshape(positions.shape[0],1))
+        pd[pd > L * 0.5] -= L
+        total += pd ** 2
+    total = np.sqrt(total)
+    square = squareform(total)
+    
+    # clustering
+    clustering = DBSCAN(eps = threshold, metric = "precomputed").fit(square)
+    labels = clustering.labels_ # assign cluster labels to each point (points labelled -1 are noise)
+    unique_labels = set(labels) # unique clustering labels
+    
+    # exclude noise in number of clusters calculation
+    if -1 in labels:
+        num_clusters = len(unique_labels) - 1
+    else:
+        num_clusters = len(unique_labels)
+        
+    # average number of particles per cluster
+    if num_clusters > 0:
+        avg_cluster_particles = len(positions) / num_clusters
+    else:
+        avg_cluster_particles = 0
+        
+    return num_clusters, avg_cluster_particles      
 
 @numba.njit(parallel=True)
 def update(positions, angles, cell_size, num_cells, max_particles_per_cell, eta):
@@ -183,6 +226,10 @@ for eta in eta_values:
          
     end_positions = positions
     end_angles = angles
+    
+    num_clusters, avg_cluster_particles = clusters(positions, L, threshold)
+    all_num_clusters.append(num_clusters)
+    all_avg_cluster_particles.append(avg_cluster_particles)
 
     fig, (ax4, ax5) = plt.subplots(1, 2, figsize = (7, 3))
     ax4.set_aspect("equal")
@@ -194,12 +241,12 @@ for eta in eta_values:
     ax5.set_aspect("equal")
     ax5.quiver(end_positions[:,0], end_positions[:,1], np.cos(end_angles), np.sin(end_angles), angles, clim = [-np.pi, np.pi], cmap = "hsv")
     ax5.set_title(f"Frame {iterations}")
-    ax5.set_xlabel(f"Noise = {eta}")
+    ax5.set_xlabel(f"$\eta$ = {eta}")
     ax5.set_xticks(range(0, 51, 10))
     ax5.set_yticks(range(0, 51, 10))
     plt.tight_layout()
     # plt.savefig(f"Vicsek_bands_14_{int(eta*10)}.png", dpi = 300)
-    plt.show()
+    # plt.show()
     
     # normalise the histogram to cartesian coordinates for plotting
     hist_normalised = hist.T / np.sum(hist)
@@ -209,23 +256,37 @@ for eta in eta_values:
     cax = ax3.imshow(hist_normalised, extent = [0, L, 0, L], origin = "lower", cmap = "hot", aspect = "auto")
     ax3.set_xticks(range(0, 51, 10))
     ax3.set_yticks(range(0, 51, 10))
-    ax3.set_title(f"Noise = {eta}")
+    ax3.set_title(f"$\eta$ = {eta}")
     fig.colorbar(cax, ax = ax3, label = "Density")
     plt.tight_layout()
     # plt.savefig(f"densitymap_14_{int(eta*10)}.png", dpi = 300)
-    plt.show()
+    # plt.show()
     
 fig, ax6 = plt.subplots(figsize = (3.5, 2.5))
-# times = np.arange(0, len(average_angles)) * time_step
 for eta, avg_angles in alignment_data.items(): # plot average angles for each eta
     times = np.arange(0, len(avg_angles)) * time_step
-    ax6.plot(times, avg_angles, label = f"noise = {eta}") 
+    ax6.plot(times, avg_angles, label = f"$\eta$ = {eta}") 
 ax6.set_xlabel("Time Step")
 ax6.set_ylabel("Average Angle (radians)")
 ax6.set_xticks(range(0, 501, 100))
 ax6.legend()
 plt.tight_layout()
 # plt.savefig("alignment_eta_14.png")
+# plt.show()
+
+fig, (ax7, ax8) = plt.subplots(1, 2, figsize = (7, 3))
+ax7.plot(eta_values, all_num_clusters, marker = ".")
+ax7.set_xticks(np.arange(0.1, 0.51, 0.1))
+ax7.set_yticks(range(0, int(max(all_num_clusters)+1)), 10)
+ax7.set_xlabel("Noise")
+ax7.set_ylabel("Number of Clusters")
+ax8.plot(eta_values, all_avg_cluster_particles, marker = ".")
+ax8.set_xticks(np.arange(0.1, 0.51, 0.1))
+ax8.set_yticks(range(0, int(max(all_avg_cluster_particles)+1), 50))
+ax8.set_xlabel("Noise")
+ax8.set_ylabel("Average Number of Particles\n per Cluster")
+plt.tight_layout()
+# plt.savefig("clusters_15.png")
 plt.show()
 
 # # Vicsek Model for N Particles Animation
