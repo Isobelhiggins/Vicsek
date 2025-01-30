@@ -38,7 +38,7 @@ frames_time_step = np.empty(time_step)
 t = 0
 average_angles = [] # empty array for average angles
 alignment_data = {} # dictionary for aligment data for each eta
-order_parameters = []
+order_parameters = [] # empty array for order parameters
 
 # histogram for average particle density in different areas of the box
 bins = int(L / (r0/2))
@@ -76,9 +76,8 @@ average_angles = [average_angle(positions)]
 
 @numba.njit
 def order_parameter(angles):
-    avg_velocity = np.array([np.cos(angles), np.sin(angles)]).mean(axis = 1)
+    avg_velocity = np.array([np.mean(np.cos(angles)), np.mean(np.sin(angles))])
     order_param = np.linalg.norm(avg_velocity)
-    # order_parameters.append(order_param)
     return order_param
 
 def clusters(positions, L, threshold):
@@ -227,6 +226,8 @@ for eta in eta_values:
     end_positions = positions
     end_angles = angles
     
+    order_parameters.append(order_parameter(end_angles))
+    
     num_clusters, avg_cluster_particles = clusters(positions, L, threshold)
     all_num_clusters.append(num_clusters)
     all_avg_cluster_particles.append(avg_cluster_particles)
@@ -274,10 +275,20 @@ plt.tight_layout()
 # plt.savefig("alignment_eta_14.png")
 # plt.show()
 
+fig, ax9 = plt.subplots(figsize = (3.5, 2.5))
+ax9.plot(eta_values, order_parameters, marker = ".")
+ax9.set_xticks(np.arange(0.1, 0.51, 0.1))
+ax9.set_yticks(np.arange(0.0, 1.1, 0.1))
+ax9.set_xlabel("Noise")
+ax9.set_ylabel("Order Parameter")
+plt.tight_layout()
+# plt.savefig("order_param_15.png")
+# plt.show()
+
 fig, (ax7, ax8) = plt.subplots(1, 2, figsize = (7, 3))
 ax7.plot(eta_values, all_num_clusters, marker = ".")
 ax7.set_xticks(np.arange(0.1, 0.51, 0.1))
-ax7.set_yticks(range(0, int(max(all_num_clusters)+1)), 10)
+ax7.set_yticks(range(0, int(max(all_num_clusters)+1), 10))
 ax7.set_xlabel("Noise")
 ax7.set_ylabel("Number of Clusters")
 ax8.plot(eta_values, all_avg_cluster_particles, marker = ".")
@@ -287,7 +298,7 @@ ax8.set_xlabel("Noise")
 ax8.set_ylabel("Average Number of Particles\n per Cluster")
 plt.tight_layout()
 # plt.savefig("clusters_15.png")
-plt.show()
+# plt.show()
 
 # # Vicsek Model for N Particles Animation
 # fig, ax = plt.subplots(figsize = (3.5, 3.5)) 
