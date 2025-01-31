@@ -186,6 +186,7 @@ def animate(frames):
     new_positions, new_angles, new_turned = update(positions, angles, turned, cell_size, lateral_num_cells, max_particles_per_cell)
         
     # update global variables
+    deltar = new_positions-positions
     positions = new_positions
     angles = new_angles
     turned = new_turned
@@ -204,8 +205,8 @@ def animate(frames):
     
     tot_vx, tot_vy = velocity_flux(positions, angles, v0)
     
-    H_vx, vxedges, vyedges = np.histogram2d(positions[:,0], positions[:,1], bins = bins, weights = tot_vx)
-    H_vy, vxedges, vyedges = np.histogram2d(positions[:,0], positions[:,1], bins = bins, weights = tot_vy)
+    H_vx, vxedges, vyedges = np.histogram2d(positions[:,0], positions[:,1], bins = bins, weights =deltar[:,0])
+    H_vy, vxedges, vyedges = np.histogram2d(positions[:,0], positions[:,1], bins = bins, weights = deltar[:,1])
     counts, vxedges, vyedges = np.histogram2d(positions[:,0], positions[:,1], bins = bins)
     
     tot_vx_all += H_vx
@@ -213,18 +214,21 @@ def animate(frames):
     counts_all += counts
     
     # Update the quiver plot
-    qv.set_offsets(positions)
-    qv.set_UVC(np.cos(new_angles), np.sin(new_angles), new_angles)
+    # qv.set_offsets(positions)
+    # qv.set_UVC(np.cos(new_angles), np.sin(new_angles), new_angles)
     np.savez_compressed(f"pos_ang_arrays/bands_repulsive/frame{frames}.npz", positions = np.array(positions, dtype = np.float16), angles = np.array(angles, dtype = np.float16))
-    return qv,
+    # return qv,
 
+
+for i in range(1000):
+    animate(i)
 # Vicsek Model for N Particles Animation
-fig, ax = plt.subplots(figsize = (3.5, 3.5)) 
-qv = ax.quiver(positions[:,0], positions[:,1], np.cos(angles), np.sin(angles), angles, clim = [-np.pi, np.pi], cmap = "hsv")
-ax.add_patch(plt.Rectangle((0, 0), L, L, edgecolor = "grey", fill = False)) # box
-ax.add_patch(plt.Rectangle((boundary, boundary), (L - 2*boundary), (L - 2*boundary), edgecolor = "grey", fill = False)) # box boundary
-anim = FuncAnimation(fig, animate, frames = range(0, iterations), interval = 5, blit = True)
-writer = FFMpegWriter(fps = 10, metadata = dict(artist = "Isobel"), bitrate = 1800)
+# fig, ax = plt.subplots(figsize = (3.5, 3.5)) 
+# qv = ax.quiver(positions[:,0], positions[:,1], np.cos(angles), np.sin(angles), angles, clim = [-np.pi, np.pi], cmap = "hsv")
+# ax.add_patch(plt.Rectangle((0, 0), L, L, edgecolor = "grey", fill = False)) # box
+# ax.add_patch(plt.Rectangle((boundary, boundary), (L - 2*boundary), (L - 2*boundary), edgecolor = "grey", fill = False)) # box boundary
+# anim = FuncAnimation(fig, animate, frames = range(0, iterations), interval = 5, blit = True)
+# writer = FFMpegWriter(fps = 10, metadata = dict(artist = "Isobel"), bitrate = 1800)
 # anim.save("Vicsek_bands_trapped.mp4", writer = writer, dpi = 300)
 # plt.show()
 
@@ -256,27 +260,27 @@ writer = FFMpegWriter(fps = 10, metadata = dict(artist = "Isobel"), bitrate = 18
 # plt.show()
 
 
-# Alignment of Particles over Time
-fig, ax2 = plt.subplots(figsize = (3.5, 2.5))
-times = np.arange(0,len(average_angles))*time_step
-ax2.plot(times, average_angles)
-ax2.set_xlabel("Time Step")
-ax2.set_ylabel("Average Angle (radians)")
-ax2.set_xticks(range(0, 501, 100))
-plt.tight_layout()
-# plt.savefig("repulsive_alignment_14.png", dpi = 300)
-# plt.show()
+# # Alignment of Particles over Time
+# fig, ax2 = plt.subplots(figsize = (3.5, 2.5))
+# times = np.arange(0,len(average_angles))*time_step
+# ax2.plot(times, average_angles)
+# ax2.set_xlabel("Time Step")
+# ax2.set_ylabel("Average Angle (radians)")
+# ax2.set_xticks(range(0, 501, 100))
+# plt.tight_layout()
+# # plt.savefig("repulsive_alignment_14.png", dpi = 300)
+# # plt.show()
 
 # normalise the histogram to cartesian coordinates for plotting
 hist_normalised = hist.T / sum(hist)
 
 # Normalised 2D Histogram of Particle Density
-fig, ax3 = plt.subplots(figsize = (3.5, 2.5))
-cax = ax3.imshow(hist_normalised, extent = [0, L, 0, L], origin = "lower", cmap = "hot", aspect = "auto")
-ax3.set_xticks(range(0, 51, 10))
-ax3.set_yticks(range(0, 51, 10))
-fig.colorbar(cax, ax = ax3, label = "Density")
-plt.tight_layout()
+# fig, ax3 = plt.subplots(figsize = (3.5, 2.5))
+# cax = ax3.imshow(hist_normalised, extent = [0, L, 0, L], origin = "lower", cmap = "hot", aspect = "auto")
+# ax3.set_xticks(range(0, 51, 10))
+# ax3.set_yticks(range(0, 51, 10))
+# fig.colorbar(cax, ax = ax3, label = "Density")
+# plt.tight_layout()
 # plt.savefig("repulsive_densitymap_14.png", dpi = 300)
 # plt.show()
 
@@ -287,7 +291,13 @@ avg_vy[counts_all > 0] = tot_vy_all[counts_all > 0] / counts_all[counts_all > 0]
 
 X, Y = np.meshgrid(vxedges[:-1], vyedges[:-1])
 
-fig, ax6 = plt.subplots(figsize = (3.5, 3.5))
-ax6.quiver(X, Y, avg_vx.T, avg_vy.T)
+# fig, ax6 = plt.subplots(figsize = (3.5, 3.5))
+plt.quiver(X, Y, avg_vx.T, avg_vy.T)
 plt.tight_layout()
+plt.savefig("quiver.pdf")
+
+plt.close()
+plt.streamplot(X, Y, avg_vx.T, avg_vy.T, color=np.sqrt(avg_vx.T**2 + avg_vy.T**2), linewidth=2)
+plt.tight_layout()
+plt.savefig("stream.pdf")
 plt.show()
