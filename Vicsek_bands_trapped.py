@@ -39,6 +39,12 @@ average_angles = [] # empty array for average angles
 bins = int(L / (r0/2))
 hist, xedges, yedges = np.histogram2d(positions[:,0], positions[:,1], bins = bins, density = False)
 
+tot_vx_all = np.zeros((bins, bins))
+tot_vy_all = np.zeros((bins, bins))
+counts_all = np.zeros((bins, bins))
+vxedges = np.linspace(0, 1, bins + 1)
+vyedges = np.linspace(0, 1, bins + 1)
+
 # define barrier position and size
 barrier_x_start, barrier_x_end = 15, 35
 barrier_y_start, barrier_y_end = 15, 35
@@ -47,14 +53,6 @@ barrier_y_start, barrier_y_end = 15, 35
 turnfactor = np.pi/2
 boundary = r0
 turned = np.zeros(N, dtype = bool)
-
-# ensure particles are not generated inside the barrier
-# positions = np.zeros((N, 2))
-# for i in range(N):
-#     position = np.random.uniform(0, L, size = 2)
-#     while (barrier_x_start - boundary) <= position[0] <= (barrier_x_end + boundary) and (barrier_y_start - boundary) <= position[1] <= (barrier_y_end + boundary):
-#         position = np.random.uniform(0, L, size = 2)
-#     positions[i] = position
     
 @numba.njit()
 def barrier_collision(position, angle, turned):
@@ -64,11 +62,6 @@ def barrier_collision(position, angle, turned):
     
     # if particle has not turned
     if turned == False:
-        # if particle's next position is within the boundary, turn
-        # if (((barrier_x_start - boundary) <= next_position[0] <= (barrier_x_end + boundary)) and
-        #     ((barrier_y_start - boundary) <= next_position[1] <= (barrier_y_end + boundary))):
-        #     next_angle += turnfactor
-        #     turned = True
             
         if ((next_position[0] <= boundary or next_position[0] >= (L - boundary)) or 
             (next_position[1] <= boundary or next_position[1] >= (L - boundary))):
@@ -76,13 +69,6 @@ def barrier_collision(position, angle, turned):
             turned = True
             
         next_position = (position + v0 * np.array([np.cos(next_angle), np.sin(next_angle)]) * deltat)
-    
-    # if particle's next position is within barrier, do not update position for 1 time step, but turn
-    # if ((barrier_x_start <= next_position[0] <= barrier_x_end) and
-    #     (barrier_y_start <= next_position[1] <= barrier_y_end)):
-    #     next_angle += turnfactor
-    #     turned = True
-    #     return position, next_angle, turned
     
     if ((next_position[0] <= 0 or next_position[0] >= L) or
         (next_position[1] <= 0 or next_position[1] >= L)):
@@ -117,6 +103,18 @@ def average_angle(new_angles):
     return np.angle(np.sum(np.exp(new_angles * 1.0j)))
 
 average_angles = [average_angle(positions)]
+
+@numba.njit
+def velocity_flux(positions, angles, v0):
+    
+    tot_vx = np.zeros(positions.shape[0])
+    tot_vy = np.zeros(positions.shape[0])
+    
+    for i in numba.prange(positions.shape[0]):
+        tot_vx[i] = v0 * np.cos(angles[i])
+        tot_vy[i] = v0 * np.sin(angles[i])
+    
+    return tot_vx, tot_vy
 
 @numba.njit(parallel=True)
 def update(positions, angles, turned, cell_size, num_cells, max_particles_per_cell):
@@ -183,7 +181,7 @@ def update(positions, angles, turned, cell_size, num_cells, max_particles_per_ce
 
 def animate(frames):
     print(frames)
-    global positions, angles, turned, frames_time_step, t, hist
+    global positions, angles, turned, frames_time_step, t, hist, tot_vx_all, tot_vy_all, counts_all, vxedges, vyedges
     
     new_positions, new_angles, new_turned = update(positions, angles, turned, cell_size, lateral_num_cells, max_particles_per_cell)
         
@@ -204,6 +202,16 @@ def animate(frames):
     # add particle positions to the histogram
     hist += np.histogram2d(positions[:,0], positions[:,1], bins = [xedges, yedges], density = False)[0]
     
+    tot_vx, tot_vy = velocity_flux(positions, angles, v0)
+    
+    H_vx, vxedges, vyedges = np.histogram2d(positions[:,0], positions[:,1], bins = bins, weights = tot_vx)
+    H_vy, vxedges, vyedges = np.histogram2d(positions[:,0], positions[:,1], bins = bins, weights = tot_vy)
+    counts, vxedges, vyedges = np.histogram2d(positions[:,0], positions[:,1], bins = bins)
+    
+    tot_vx_all += H_vx
+    tot_vy_all += H_vy
+    counts_all += counts
+    
     # Update the quiver plot
     qv.set_offsets(positions)
     qv.set_UVC(np.cos(new_angles), np.sin(new_angles), new_angles)
@@ -213,14 +221,12 @@ def animate(frames):
 # Vicsek Model for N Particles Animation
 fig, ax = plt.subplots(figsize = (3.5, 3.5)) 
 qv = ax.quiver(positions[:,0], positions[:,1], np.cos(angles), np.sin(angles), angles, clim = [-np.pi, np.pi], cmap = "hsv")
-# ax.add_patch(plt.Rectangle((barrier_x_start, barrier_y_start), barrier_x_end - barrier_x_start, barrier_y_end - barrier_y_start, color = "grey", alpha = 0.5)) # barrier
-# ax.add_patch(plt.Rectangle((barrier_x_start - boundary, barrier_y_start - boundary), (barrier_x_end + boundary) - (barrier_x_start - boundary), (barrier_y_end + boundary) - (barrier_y_start - boundary), edgecolor = "grey", fill = False)) # boundary
 ax.add_patch(plt.Rectangle((0, 0), L, L, edgecolor = "grey", fill = False)) # box
 ax.add_patch(plt.Rectangle((boundary, boundary), (L - 2*boundary), (L - 2*boundary), edgecolor = "grey", fill = False)) # box boundary
 anim = FuncAnimation(fig, animate, frames = range(0, iterations), interval = 5, blit = True)
 writer = FFMpegWriter(fps = 10, metadata = dict(artist = "Isobel"), bitrate = 1800)
-anim.save("Vicsek_bands_trapped.mp4", writer = writer, dpi = 300)
-plt.show()
+# anim.save("Vicsek_bands_trapped.mp4", writer = writer, dpi = 300)
+# plt.show()
 
 # First and Last Frame Vicsek Model for N particles
 # start_positions = positions.copy()
@@ -273,3 +279,15 @@ fig.colorbar(cax, ax = ax3, label = "Density")
 plt.tight_layout()
 # plt.savefig("repulsive_densitymap_14.png", dpi = 300)
 # plt.show()
+
+avg_vx = np.zeros_like(tot_vx_all)
+avg_vy = np.zeros_like(tot_vy_all)
+avg_vx[counts_all > 0] = tot_vx_all[counts_all > 0] / counts_all[counts_all > 0]
+avg_vy[counts_all > 0] = tot_vy_all[counts_all > 0] / counts_all[counts_all > 0]
+
+X, Y = np.meshgrid(vxedges[:-1], vyedges[:-1])
+
+fig, ax6 = plt.subplots(figsize = (3.5, 3.5))
+ax6.quiver(X, Y, avg_vx.T, avg_vy.T)
+plt.tight_layout()
+plt.show()
