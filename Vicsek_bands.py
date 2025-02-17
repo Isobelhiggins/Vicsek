@@ -32,14 +32,17 @@ lateral_num_cells = int(L / cell_size)
 total_num_cells = lateral_num_cells ** 2
 max_particles_per_cell = int(rho * cell_size ** 2 * 10)
 
-# average angles
+# average angles and order parameter
 time_step = 10
 frames_time_step = np.empty(time_step)
 t = 0
 average_angles = [] # empty array for average angles
 alignment_data = {} # dictionary for aligment data for each eta
 order_parameters = [] # empty array for order parameters
-order_data = {}
+order_data = {} # dictionary for order parameter data for each eta
+block_size = 20 
+std_threshold = 0.05 # standard deviation threshold for steady state to be reached
+steady_blocks = 5 # consecutive blocks that meet std_threshold criteria
 
 # histogram for average particle density in different areas of the box
 bins = int(L / (r0/2))
@@ -79,8 +82,35 @@ average_angles = [average_angle(positions)]
 @numba.njit
 def order_parameter(angles):
     avg_velocity = np.array([np.mean(np.cos(angles)), np.mean(np.sin(angles))])
-    order_param = np.linalg.norm(avg_velocity)
+    order_param = np.linalg.norm(avg_velocity) # norm of avg velocity
     return order_param
+
+def steady_state(order_parameters):
+    steady_reached = False
+    steady_time = 0
+    steady_blocks_count = 0
+    
+    # iterate over order parameters in blocks
+    for i in range(len(order_parameters) - block_size + 1):
+        block = order_parameters[i:(i + block_size)] # separate one block from the list (from i to i+block_size)
+        running_average = np.mean(block) # average order parameter for that block
+        running_std = np.std(block) # standard deviation for that block
+                
+        # check block srandard deviation with threshold
+        if running_std < std_threshold:
+            steady_blocks_count += 1 # increment consecutive blocks that meet std threshold
+            
+            # check if number of consecutive steady blocks meets criteria
+            if steady_blocks_count >= steady_blocks:
+                steady_reached = True
+                steady_time = i + block_size # time of steady state reached
+                break
+        
+        # if not enough consecutive blocks, reset count to 0    
+        else:
+            steady_blocks_count = 0
+                
+    return steady_reached, steady_time
 
 def clusters(positions, L, threshold):
     # taking into account periodic boundary conditions
@@ -217,7 +247,7 @@ for eta in eta_values:
     angles = np.random.uniform(-np.pi, np.pi, size = N)
     
     # average_angles = [] # initialise average angles array
-    order_parameters = []
+    # order_parameters = [] # intialise order parameter array
     
     # hist = np.empty((len(xedges) - 1, len(yedges) - 1)) # initialise histogram density map
     
@@ -239,18 +269,16 @@ for eta in eta_values:
         # store alignment for each eta    
         # alignment_data[eta] = average_angles
         
-        order_data[eta] = order_parameters
+        # order_data[eta] = order_parameters
          
     end_positions = positions
     end_angles = angles
-        
-    # order_parameters.append(order_parameter(end_angles))
+            
+    labels, num_clusters, avg_cluster_particles = clusters(positions, L, threshold)
+    all_num_clusters.append(num_clusters)
+    all_avg_cluster_particles.append(avg_cluster_particles)
     
-#     labels, num_clusters, avg_cluster_particles = clusters(positions, L, threshold)
-#     all_num_clusters.append(num_clusters)
-#     all_avg_cluster_particles.append(avg_cluster_particles)
-    
-#     # clustering visualisation plotting
+#     # Clustering Visualisation Plotting
 #     ax10 = axes[int(eta*10)]
 #     unique_labels = set(labels)
 #     colors = [plt.cm.Spectral(each) for each in np.linspace(0, 1, len(unique_labels))]
@@ -273,6 +301,7 @@ for eta in eta_values:
 # # plt.savefig("clustervis_16.png", dpi = 300) 
 # plt.show()
 
+    # First and Last Frame
     # fig, (ax4, ax5) = plt.subplots(1, 2, figsize = (7, 3))
     # ax4.set_aspect("equal")
     # ax4.quiver(start_positions[:,0], start_positions[:,1], np.cos(start_angles), np.sin(start_angles), angles, clim = [-np.pi, np.pi], cmap = "hsv")
@@ -305,7 +334,8 @@ for eta in eta_values:
     # plt.tight_layout()
     # plt.savefig(f"densitymap_14_{int(eta*10)}.png", dpi = 300)
     # plt.show()
-    
+ 
+# Average Angles for Different Eta  
 # fig, ax6 = plt.subplots(figsize = (3.5, 2.5))
 # for eta, avg_angles in alignment_data.items(): # plot average angles for each eta
 #     times = np.arange(0, len(avg_angles)) * time_step
@@ -318,32 +348,38 @@ for eta in eta_values:
 # plt.savefig("alignment_eta_14.png")
 # plt.show()
 
-fig, ax9 = plt.subplots(figsize = (3.5, 2.5))
-for eta, order_params in order_data.items():
-    times = np.arange(0, len(order_params)) * time_step
-    ax9.plot(times, order_params, label = f"$\eta$ = {eta}")
-ax9.set_xlabel("Time Step")
-ax9.set_ylabel("Order Parameter")
-ax9.set_xticks(np.arange(0, 501, 100))
-ax9.legend()
-plt.tight_layout()
-plt.savefig("order_param_18.png")
-plt.show()
-
-# fig, (ax7, ax8) = plt.subplots(1, 2, figsize = (7, 3))
-# ax7.plot(eta_values, all_num_clusters, marker = ".")
-# ax7.set_xticks(np.arange(0.1, 0.51, 0.1))
-# ax7.set_yticks(range(0, int(max(all_num_clusters)+1), 10))
-# ax7.set_xlabel("Noise")
-# ax7.set_ylabel("Number of Clusters")
-# ax8.plot(eta_values, all_avg_cluster_particles, marker = ".")
-# ax8.set_xticks(np.arange(0.1, 0.51, 0.1))
-# ax8.set_yticks(range(0, int(max(all_avg_cluster_particles)+1), 50))
-# ax8.set_xlabel("Noise")
-# ax8.set_ylabel("Average Number of Particles\n per Cluster")
+# Order Parameter for Different Eta
+# fig, ax9 = plt.subplots(figsize = (3.5, 2.5))
+# for eta, order_params in order_data.items():
+#     times = np.arange(0, len(order_params)) * time_step
+#     order, = ax9.plot(times, order_params, label = f"$\eta$ = {eta}")
+#     order_colour = order.get_color()
+#     steady_reached, steady_time = steady_state(order_params)
+#     if steady_reached == True:
+#         ax9.axvline(x = steady_time * time_step, color = order_colour, linestyle = "--")
+# ax9.set_xlabel("Time Step")
+# ax9.set_ylabel("Order Parameter")
+# ax9.set_xticks(np.arange(0, 501, 100))
+# ax9.legend()
 # plt.tight_layout()
-# # plt.savefig("clusters_15.png")
+# # plt.savefig("order_param_18.png")
 # plt.show()
+
+Clustering for Different Eta
+fig, (ax7, ax8) = plt.subplots(1, 2, figsize = (7, 3))
+ax7.plot(eta_values, all_num_clusters, marker = ".")
+ax7.set_xticks(np.arange(0.1, 0.51, 0.1))
+ax7.set_yticks(range(0, int(max(all_num_clusters)+1), 10))
+ax7.set_xlabel("Noise")
+ax7.set_ylabel("Number of Clusters")
+ax8.plot(eta_values, all_avg_cluster_particles, marker = ".")
+ax8.set_xticks(np.arange(0.1, 0.51, 0.1))
+ax8.set_yticks(range(0, int(max(all_avg_cluster_particles)+1), 50))
+ax8.set_xlabel("Noise")
+ax8.set_ylabel("Average Number of Particles\n per Cluster")
+plt.tight_layout()
+# plt.savefig("clusters_15.png")
+plt.show()
 
 # # Vicsek Model for N Particles Animation
 # fig, ax = plt.subplots(figsize = (3.5, 3.5)) 
