@@ -39,11 +39,13 @@ t = 0
 average_angles = [] # empty array for average angles
 alignment_data = {} # dictionary for aligment data for each eta
 order_parameters = [] # empty array for order parameters
+order_data = {}
 
 # histogram for average particle density in different areas of the box
 bins = int(L / (r0/2))
 hist, xedges, yedges = np.histogram2d(positions[:,0], positions[:,1], bins = bins, density = False)
 
+# clustering for different noise
 threshold = r0
 all_num_clusters = [] # empty array for number of clusters
 all_avg_cluster_particles = [] # empty array for average num of particles per cluster
@@ -107,7 +109,7 @@ def clusters(positions, L, threshold):
     else:
         avg_cluster_particles = 0
         
-    return num_clusters, avg_cluster_particles      
+    return labels, num_clusters, avg_cluster_particles   
 
 @numba.njit(parallel=True)
 def update(positions, angles, cell_size, num_cells, max_particles_per_cell, eta):
@@ -177,23 +179,36 @@ def animate(frames):
     positions = new_positions
     angles = new_angles
     
-    # update the empty array with average angle
-    frames_time_step[t] = average_angle(new_angles)
-    if t == time_step - 1:  # check if array filled
-        average_angles.append(average_angle(frames_time_step))
-        t = 0  # reset t
-        frames_time_step = np.empty(time_step)  # reinitialise the array
+    # # update the empty array with average angle
+    # frames_time_step[t] = average_angle(new_angles)
+    # if t == time_step - 1:  # check if array filled
+    #     average_angles.append(average_angle(frames_time_step))
+    #     t = 0  # reset t
+    #     frames_time_step = np.empty(time_step)  # reinitialise the array
+    # else:
+    #     t += 1  # increment t
+    
+    # update the empty array with order parameter    
+    frames_time_step[t] = order_parameter(new_angles)
+    if t == time_step - 1:
+        order_parameters.append(np.mean(frames_time_step))
+        t = 0
+        frames_time_step = np.empty(time_step)
     else:
-        t += 1  # increment t
+        t += 1
     
     # add particle positions to the histogram
-    hist += np.histogram2d(positions[:,0], positions[:,1], bins = [xedges, yedges], density = False)[0]
+    # hist += np.histogram2d(positions[:,0], positions[:,1], bins = [xedges, yedges], density = False)[0]
     
     # Update the quiver plot
-    qv.set_offsets(positions)
-    qv.set_UVC(np.cos(new_angles), np.sin(new_angles), new_angles)
+    # qv.set_offsets(positions)
+    # qv.set_UVC(np.cos(new_angles), np.sin(new_angles), new_angles)
     np.savez_compressed(f"pos_ang_arrays/bands/frame{frames}.npz", positions = np.array(positions, dtype = np.float16), angles = np.array(angles, dtype = np.float16))
-    return qv,
+    # return qv,
+
+# Cluster Visualisation
+# fig, axes = plt.subplots(2, 3, figsize = (7, 6))
+# axes = axes.flatten()
 
 # Alignment of Particles for Different Noise
 for eta in eta_values:
@@ -201,14 +216,15 @@ for eta in eta_values:
     positions = np.random.uniform(0, L, size = (N, 2))
     angles = np.random.uniform(-np.pi, np.pi, size = N)
     
-    average_angles = [] # initialise average angles array
+    # average_angles = [] # initialise average angles array
+    order_parameters = []
     
-    hist = np.empty((len(xedges) - 1, len(yedges) - 1)) # initialise histogram density map
+    # hist = np.empty((len(xedges) - 1, len(yedges) - 1)) # initialise histogram density map
     
     # Vicsek Model for N Particles Animation
-    fig, ax = plt.subplots(figsize = (3.5, 3.5)) 
-    qv = ax.quiver(positions[:,0], positions[:,1], np.cos(angles), np.sin(angles), angles, clim = [-np.pi, np.pi], cmap = "hsv")
-    anim = FuncAnimation(fig, animate, frames = range(0, iterations + 1), interval = 5, blit = True)
+    # fig, ax = plt.subplots(figsize = (3.5, 3.5)) 
+    # qv = ax.quiver(positions[:,0], positions[:,1], np.cos(angles), np.sin(angles), angles, clim = [-np.pi, np.pi], cmap = "hsv")
+    # anim = FuncAnimation(fig, animate, frames = range(0, iterations + 1), interval = 5, blit = True)
     # writer = FFMpegWriter(fps = 10, metadata = dict(artist = "Isobel"), bitrate = 1800)
     # anim.save("Vicsek_bands.mp4", writer = writer, dpi = 300)
     # plt.show()
@@ -221,83 +237,112 @@ for eta in eta_values:
         animate(frame)
         
         # store alignment for each eta    
-        alignment_data[eta] = average_angles
+        # alignment_data[eta] = average_angles
+        
+        order_data[eta] = order_parameters
          
     end_positions = positions
     end_angles = angles
+        
+    # order_parameters.append(order_parameter(end_angles))
     
-    order_parameters.append(order_parameter(end_angles))
+#     labels, num_clusters, avg_cluster_particles = clusters(positions, L, threshold)
+#     all_num_clusters.append(num_clusters)
+#     all_avg_cluster_particles.append(avg_cluster_particles)
     
-    num_clusters, avg_cluster_particles = clusters(positions, L, threshold)
-    all_num_clusters.append(num_clusters)
-    all_avg_cluster_particles.append(avg_cluster_particles)
+#     # clustering visualisation plotting
+#     ax10 = axes[int(eta*10)]
+#     unique_labels = set(labels)
+#     colors = [plt.cm.Spectral(each) for each in np.linspace(0, 1, len(unique_labels))]
+    
+#     for k, col in zip(unique_labels, colors):
+#         if k == -1:
+#             col = [0, 0, 0, 1]
+            
+#         class_member_mask = (labels == k)
+#         xy = positions[class_member_mask]
+#         ax10.plot(xy[:,0], xy[:,1], 'o', markerfacecolor = tuple(col), markeredgecolor = "k", markersize = 3)
+        
+#     ax10.set_title(f"Noise = {eta}")
+#     ax10.set_xlabel("x")
+#     ax10.set_ylabel("y")
+#     ax10.set_xticks(range(0, 51, 10))
+#     ax10.set_yticks(range(0, 51, 10))
+      
+# plt.tight_layout()
+# # plt.savefig("clustervis_16.png", dpi = 300) 
+# plt.show()
 
-    fig, (ax4, ax5) = plt.subplots(1, 2, figsize = (7, 3))
-    ax4.set_aspect("equal")
-    ax4.quiver(start_positions[:,0], start_positions[:,1], np.cos(start_angles), np.sin(start_angles), angles, clim = [-np.pi, np.pi], cmap = "hsv")
-    ax4.set_title("Frame 0")
-    ax4.set_xlabel(f"Noise = {eta}")
-    ax4.set_xticks(range(0, 51, 10))
-    ax4.set_yticks(range(0, 51, 10))
-    ax5.set_aspect("equal")
-    ax5.quiver(end_positions[:,0], end_positions[:,1], np.cos(end_angles), np.sin(end_angles), angles, clim = [-np.pi, np.pi], cmap = "hsv")
-    ax5.set_title(f"Frame {iterations}")
-    ax5.set_xlabel(f"$\eta$ = {eta}")
-    ax5.set_xticks(range(0, 51, 10))
-    ax5.set_yticks(range(0, 51, 10))
-    plt.tight_layout()
+    # fig, (ax4, ax5) = plt.subplots(1, 2, figsize = (7, 3))
+    # ax4.set_aspect("equal")
+    # ax4.quiver(start_positions[:,0], start_positions[:,1], np.cos(start_angles), np.sin(start_angles), angles, clim = [-np.pi, np.pi], cmap = "hsv")
+    # ax4.set_title("Frame 0")
+    # ax4.set_xlabel(f"Noise = {eta}")
+    # ax4.set_xticks(range(0, 51, 10))
+    # ax4.set_yticks(range(0, 51, 10))
+    # ax5.set_aspect("equal")
+    # ax5.quiver(end_positions[:,0], end_positions[:,1], np.cos(end_angles), np.sin(end_angles), angles, clim = [-np.pi, np.pi], cmap = "hsv")
+    # ax5.set_title(f"Frame {iterations}")
+    # ax5.set_xlabel(f"$\eta$ = {eta}")
+    # ax5.set_xticks(range(0, 51, 10))
+    # ax5.set_yticks(range(0, 51, 10))
+    # plt.tight_layout()
     # plt.savefig(f"Vicsek_bands_14_{int(eta*10)}.png", dpi = 300)
     # plt.show()
     
     # normalise the histogram to cartesian coordinates for plotting
-    hist_normalised = hist.T / np.sum(hist)
+    # hist_normalised = hist.T / np.sum(hist)
 
     # Normalised 2D Histogram of Particle Density
-    fig, ax3 = plt.subplots(figsize = (3.5, 2.5))
-    cax = ax3.imshow(hist_normalised, extent = [0, L, 0, L], origin = "lower", cmap = "hot", aspect = "auto")
-    ax3.set_xticks(range(0, 51, 10))
-    ax3.set_yticks(range(0, 51, 10))
-    ax3.set_title(f"$\eta$ = {eta}")
-    fig.colorbar(cax, ax = ax3, label = "Density")
-    plt.tight_layout()
+    # fig, ax3 = plt.subplots(figsize = (3.5, 2.5))
+    # cax = ax3.imshow(hist_normalised, extent = [0, L, 0, L], origin = "lower", cmap = "hot", aspect = "auto")
+    # ax3.set_xlabel("x")
+    # ax3.set_ylabel("y")
+    # ax3.set_xticks(range(0, 51, 10))
+    # ax3.set_yticks(range(0, 51, 10))
+    # ax3.set_title(f"$\eta$ = {eta}")
+    # fig.colorbar(cax, ax = ax3, label = "Density")
+    # plt.tight_layout()
     # plt.savefig(f"densitymap_14_{int(eta*10)}.png", dpi = 300)
     # plt.show()
     
-fig, ax6 = plt.subplots(figsize = (3.5, 2.5))
-for eta, avg_angles in alignment_data.items(): # plot average angles for each eta
-    times = np.arange(0, len(avg_angles)) * time_step
-    ax6.plot(times, avg_angles, label = f"$\eta$ = {eta}") 
-ax6.set_xlabel("Time Step")
-ax6.set_ylabel("Average Angle (radians)")
-ax6.set_xticks(range(0, 501, 100))
-ax6.legend()
-plt.tight_layout()
+# fig, ax6 = plt.subplots(figsize = (3.5, 2.5))
+# for eta, avg_angles in alignment_data.items(): # plot average angles for each eta
+#     times = np.arange(0, len(avg_angles)) * time_step
+#     ax6.plot(times, avg_angles, label = f"$\eta$ = {eta}") 
+# ax6.set_xlabel("Time Step")
+# ax6.set_ylabel("Average Angle (radians)")
+# ax6.set_xticks(range(0, 501, 100))
+# ax6.legend()
+# plt.tight_layout()
 # plt.savefig("alignment_eta_14.png")
 # plt.show()
 
 fig, ax9 = plt.subplots(figsize = (3.5, 2.5))
-ax9.plot(eta_values, order_parameters, marker = ".")
-ax9.set_xticks(np.arange(0.1, 0.51, 0.1))
-ax9.set_yticks(np.arange(0.0, 1.1, 0.1))
-ax9.set_xlabel("Noise")
+for eta, order_params in order_data.items():
+    times = np.arange(0, len(order_params)) * time_step
+    ax9.plot(times, order_params, label = f"$\eta$ = {eta}")
+ax9.set_xlabel("Time Step")
 ax9.set_ylabel("Order Parameter")
+ax9.set_xticks(np.arange(0, 501, 100))
+ax9.legend()
 plt.tight_layout()
-# plt.savefig("order_param_15.png")
-# plt.show()
+plt.savefig("order_param_18.png")
+plt.show()
 
-fig, (ax7, ax8) = plt.subplots(1, 2, figsize = (7, 3))
-ax7.plot(eta_values, all_num_clusters, marker = ".")
-ax7.set_xticks(np.arange(0.1, 0.51, 0.1))
-ax7.set_yticks(range(0, int(max(all_num_clusters)+1), 10))
-ax7.set_xlabel("Noise")
-ax7.set_ylabel("Number of Clusters")
-ax8.plot(eta_values, all_avg_cluster_particles, marker = ".")
-ax8.set_xticks(np.arange(0.1, 0.51, 0.1))
-ax8.set_yticks(range(0, int(max(all_avg_cluster_particles)+1), 50))
-ax8.set_xlabel("Noise")
-ax8.set_ylabel("Average Number of Particles\n per Cluster")
-plt.tight_layout()
-# plt.savefig("clusters_15.png")
+# fig, (ax7, ax8) = plt.subplots(1, 2, figsize = (7, 3))
+# ax7.plot(eta_values, all_num_clusters, marker = ".")
+# ax7.set_xticks(np.arange(0.1, 0.51, 0.1))
+# ax7.set_yticks(range(0, int(max(all_num_clusters)+1), 10))
+# ax7.set_xlabel("Noise")
+# ax7.set_ylabel("Number of Clusters")
+# ax8.plot(eta_values, all_avg_cluster_particles, marker = ".")
+# ax8.set_xticks(np.arange(0.1, 0.51, 0.1))
+# ax8.set_yticks(range(0, int(max(all_avg_cluster_particles)+1), 50))
+# ax8.set_xlabel("Noise")
+# ax8.set_ylabel("Average Number of Particles\n per Cluster")
+# plt.tight_layout()
+# # plt.savefig("clusters_15.png")
 # plt.show()
 
 # # Vicsek Model for N Particles Animation
@@ -322,11 +367,15 @@ plt.tight_layout()
 # ax4.set_aspect("equal")
 # ax4.quiver(start_positions[:,0], start_positions[:,1], np.cos(start_angles), np.sin(start_angles), angles, clim = [-np.pi, np.pi], cmap = "hsv")
 # ax4.set_title("Frame 0")
+# ax4.set_xlabel("x")
+# ax4.set_ylabel("y")
 # ax4.set_xticks(range(0, 51, 10))
 # ax4.set_yticks(range(0, 51, 10))
 # ax5.set_aspect("equal")
 # ax5.quiver(end_positions[:,0], end_positions[:,1], np.cos(end_angles), np.sin(end_angles), angles, clim = [-np.pi, np.pi], cmap = "hsv")
 # ax5.set_title(f"Frame {iterations}")
+# ax5.set_xlabel("x")
+# ax5.set_ylabel("y")
 # ax5.set_xticks(range(0, 51, 10))
 # ax5.set_yticks(range(0, 51, 10))
 # plt.tight_layout()
@@ -350,6 +399,8 @@ plt.tight_layout()
 # # Normalised 2D Histogram of Particle Density
 # fig, ax3 = plt.subplots(figsize = (3.5, 2.5))
 # cax = ax3.imshow(hist_normalised, extent = [0, L, 0, L], origin = "lower", cmap = "hot", aspect = "auto")
+# ax3.set_xlabel("x")
+# ax3.set_ylabel("y")
 # ax3.set_xticks(range(0, 51, 10))
 # ax3.set_yticks(range(0, 51, 10))
 # fig.colorbar(cax, ax = ax3, label = "Density")
